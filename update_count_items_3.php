@@ -1,7 +1,7 @@
 <?php
 require_once "functions/topen.php";
 require_once "functions/functions.php";
-require_once "wb_catalog.php"; // массиво с каталогов наших товаров
+require_once "functions/wb_catalog.php"; // массиво с каталогов наших товаров
 require_once "razbor_post_array.php"; // массиво с каталогов наших товаров
 
 echo '<link rel="stylesheet" href="css/main_table.css">';
@@ -65,9 +65,6 @@ echo     'Результат обмена : '.$http_code. "<br>";
 
 $res = json_decode($res, true);
 
-
-// echo "<pre>";
-// print_r($res);
 
 die('sssssss');
 

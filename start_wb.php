@@ -9,6 +9,7 @@ echo <<<HTML
 <select required name="market" id="market-select">
     <option value="wb">WB</option>
     <option value="wbip">WB IP</option>
+    <option value="ozon">OZON</option>
     
 </select>
 <hr>

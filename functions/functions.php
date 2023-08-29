@@ -80,10 +80,6 @@ $res = json_decode($res, true);
 return $res;
 }
 
-
-
-
-
 /****************************************************************************************************************
 **************************** Получаем все новые заказы **************************************
 ****************************************************************************************************************/
@@ -93,80 +89,6 @@ function get_all_new_zakaz ($token_wb) {
 	$res = light_query_without_data($token_wb, $link_wb);
 	return $res;
 }
-
-
-
-/****************************************************************************************************************
-************************************* Создаем поставку на сайте WB **************************************
-****************************************************************************************************************/
-function make_postavka ($token_wb, $name_postavka) {
-$data = array('name' => $name_postavka);
- $link_wb = 'https://suppliers-api.wildberries.ru/api/v3/supplies';
- $res = light_query_with_data ($token_wb, $link_wb, $data);
-
- return $res; // Возвращаем номер поставки
-}
-
-
-/****************************************************************************************************************
-************************************* Получаем заказы из одной поставки    **************************************
-****************************************************************************************************************/
-function get_orders_from_supply($token_wb, $supplyId) {
-	$link_wb = 'https://suppliers-api.wildberries.ru/api/v3/supplies/'.$supplyId.'/orders';
-	$res =  light_query_without_data($token_wb, $link_wb);
-	// echo "<pre>";
-    // print_r($res['orders']);
-	return $res['orders']; // 
-	}
-
-
-/****************************************************************************************************************
-************************************* Получаем стикеры по номерам заказа  **************************************
-****************************************************************************************************************/
-
-	function get_stiker_from_supply ($token_wb, $arr_orders, $N_1C_zakaz, $article) {
-		$dop_link="?type=png&width=40&height=30";  // QUERY PARAMETERS
-		$link_wb  = "https://suppliers-api.wildberries.ru/api/v3/orders/stickers".$dop_link;;
-		 // массив с номерами заказа
-	 	$data = array(
-					"orders"=> $arr_orders
-				);
-  		// получаем данные со стикерами 
-		$res_stikers = light_query_with_data($token_wb, $link_wb, $data); 
-		
-		// ФОРМИРУЕМ ПДФ файл
-		require_once "libs/fpdf/fpdf.php";
-		//create pdf object
-		$pdf = new FPDF('L','mm', array(80, 106)); // задаем пдф файл размером с пнг файл
-		//add new page
-		$pdf->AliasNbPages();
-		
-		$file_num=1; // временный порядковй номер для картинки
-		foreach ($res_stikers['stickers'] as $items) {
-		$filedata='';
-		$pdf->AddPage();
-		$file = "EXCEL/stik".$file_num.".png";
-		
-		$filedata = base64_decode($items['file']);
-		
-		file_put_contents($file, $filedata, FILE_APPEND); // добавляем данные в файл с накопительным итогом
-		$pdf->image($file,0,0,'PNG');
-		unlink ($file); // удалям пнг файлы, чтобы не копить их
-		
-		$file_num++;
-				}
-		// запись в пдф файл
-		$pdf_file = "№".$N_1C_zakaz."_stikers_(".$article.") ".count($res_stikers['stickers'])."шт.pdf";  
-		
-		if (file_exists("EXCEL/".$pdf_file)) {
-			$pdf_file=rand(0,100000)."_".$pdf_file; // если уже есть название такого файла
-		}
-		$pdf->Output("EXCEL/".$pdf_file, 'F');
-
-		return $pdf_file; // возвращаем название ПДФ файла для формирования  архива;
-		}
-
-
 
 
 
@@ -236,3 +158,81 @@ function make_right_articl($article) {
 	
 		return $new_article;
 	}
+
+
+	
+/* * ******************************************************************************************************
+Выводим список заказов ОЗОН на определенную дату 
+РАБОЧАЯ ВЕРСИЯ 
+*** ожидает упаковки ****
+*************************************************************************************************************** */
+function get_all_waiting_posts_for_need_date($token, $client_id, $date_query_ozon, $send_status, $dop_days_query){
+    // awaiting_packaging - заказы ожидают сборку
+    // awaiting_deliver   - заказы ожидают отгрузку 
+
+
+
+$temp_dop_day = "+".$dop_days_query.' day';
+$date_query_ozon_end = date('Y-m-d', strtotime($temp_dop_day, strtotime($date_query_ozon)));
+
+
+$send_data=  array(
+    "dir" => "ASC",
+    "filter" => array(
+    "cutoff_from" => $date_query_ozon."T00:00:00Z",
+    "cutoff_to" =>   $date_query_ozon_end."T23:59:59Z",
+    "delivery_method_id" => [ ],
+    "provider_id" => [ ],
+    "status" => $send_status,
+    "warehouse_id" => [ ]
+    ),
+    "limit" => 1000,
+    "offset" => 0,
+    "with" => array(
+    "analytics_data"  => true,
+    "barcodes"  => true,
+    "financial_data" => true,
+    "translit" => true
+    )
+    );
+
+ $send_data = json_encode($send_data, JSON_UNESCAPED_UNICODE)  ;  
+
+
+$ozon_dop_url = "v3/posting/fbs/unfulfilled/list";
+
+
+// запустили запрос на озона
+$res = send_injection_on_ozon($token, $client_id, $send_data, $ozon_dop_url );
+return $res;
+}
+
+/* **************************************************************************************************************
+*********  Функция обновляния данных Она ОЗОН
+************************************************************************************************************** */
+
+function send_injection_on_ozon($token, $client_id, $send_data, $ozon_dop_url ) {
+ 
+	$ch = curl_init('https://api-seller.ozon.ru/'.$ozon_dop_url);
+	curl_setopt($ch, CURLOPT_HTTPHEADER, array(
+		'Api-Key:' . $token,
+		'Client-Id:' . $client_id, 
+		'Content-Type:application/json'
+	));
+	curl_setopt($ch, CURLOPT_POSTFIELDS, $send_data); 
+	curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+	curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+	curl_setopt($ch, CURLOPT_HEADER, false);
+	$res = curl_exec($ch);
+
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE); // Получаем HTTP-код
+
+	curl_close($ch);
+	
+	$res = json_decode($res, true);
+
+//    echo     'Результат обмена : '.$http_code. "<br>";
+   
+    return($res);	
+
+}

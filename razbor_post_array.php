@@ -2,9 +2,6 @@
 
 function razbor_post_massive($arr_post){
 
-//     echo "<pre>";
-// print_r($arr_post);
-
 foreach ($arr_post as $key=>$value) {
  
     if (mb_strpos($key, 'BarCode_') > 0){
@@ -26,13 +23,6 @@ foreach ($arr_post as $key=>$value) {
 
     }
 }
-
-// echo "<pre>";
-// print_r($item_quantity);
-
-// print_r($arr_BarCode);
-// print_r($arr_value);
-// print_r($arr_check);
 
 return $item_quantity;
 }

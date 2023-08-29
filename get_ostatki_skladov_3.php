@@ -1,9 +1,44 @@
 <?php
-require_once "functions/topen.php";
-require_once "functions/functions.php";
-require_once "wb_catalog.php"; // массиво с каталогов наших товаров
 
-require_once "parce_excel_sklad.php"; // массиво с каталогов наших товаров
+require_once 'libs/PHPExcel-1.8/Classes/PHPExcel.php';
+require_once 'libs/PHPExcel-1.8/Classes/PHPExcel/Writer/Excel2007.php';
+require_once 'libs/PHPExcel-1.8/Classes/PHPExcel/IOFactory.php';
+
+require_once "functions/topen.php";
+require_once "functions/torpen.php";
+require_once "functions/functions.php";
+require_once "functions/wb_catalog.php"; // массиво с каталогов наших товаров
+require_once "functions/parce_excel_sklad_json.php"; // массиво с каталогов наших товаров
+
+echo '<link rel="stylesheet" href="css/main_table.css">';
+
+$uploaddir = "uploads/";
+$uploadfile = $uploaddir . basename( $_FILES['file_excel']['name']);
+
+if(move_uploaded_file($_FILES['file_excel']['tmp_name'], $uploadfile))
+{
+  echo "Файл с остатками товаров, УСПЕШНО ЗАГРУЖЕН<br>";
+}
+else
+{
+  die ("DIE ОШИБКА при загрузке файла");
+}
+
+
+// if (!copy($uploadfile, "temp_sklad/temp.xlsx")) {
+//     die ("DIE не удалось скопировать $uploadfile...\n");
+// }
+
+// $xls = PHPExcel_IOFactory::load('temp_sklad/temp.xlsx');
+$xls = PHPExcel_IOFactory::load($uploadfile);
+$arr_article_items =  Parce_excel_1c_sklad ($xls) ; // парсим Загруженный файл и формируем JSON архив для дальнейшей работы
+    
+
+// echo "<pre>";
+
+// print_r($arr_article_items);
+
+
 
 $market = $_POST['market'];
 //  присваиваем номер склада
@@ -15,7 +50,13 @@ if ($market == 'wb'){
     $token = $token_wbip;
     $warehouseId = 221597;// ID склада ИП на ВБ 
     $arr_catalog = get_catalog_wbip ();
-} else {
+} elseif ($market == 'ozon'){
+    $client_id = $client_id_ozon;
+    $token = $token_ozon;
+    header("Location: get_ostatki_skladov_ozon.php", true, 301);
+exit();
+    
+ } else {
     die('DIE не смогли выбрать склад ВБ');
 }
 
@@ -23,7 +64,7 @@ if ($market == 'wb'){
 
 // die('DIE START GET OSTATKI');
 
-echo '<link rel="stylesheet" href="css/main_table.css">';
+
 
 
 foreach ($arr_catalog as $items) {
@@ -99,20 +140,22 @@ foreach ($result['orders'] as $itemss) {
 // $sum = @$sum + $itemss['convertedPrice']/100;
 }
 
-foreach ($arr_name as $key => $temp_items) {
-	$arr_article_count[$key] = count($arr_name[$key]);
-}
-
-foreach ($arr_article_count as $key=>$prods)  {
-    foreach ($arr_catalog as &$items) {
-        // echo "<br>key=$key<br>";
-        if ($key == $items['article']) {
-            $items['sell_count'] = $prods;
-        } 
+if (isset ($arr_name)) {  // проверяем есть ли массив проданных товаров
+    foreach ($arr_name as $key => $temp_items) {
+        $arr_article_count[$key] = count($arr_name[$key]);
     }
 
-}
 
+    foreach ($arr_article_count as $key=>$prods)  {
+        foreach ($arr_catalog as &$items) {
+            // echo "<br>key=$key<br>";
+            if ($key == $items['article']) {
+                $items['sell_count'] = $prods;
+            } 
+        }
+
+    }
+}
 
 // $quantity_1c = 29;
 
@@ -124,10 +167,11 @@ echo <<<HTML
     <td>артикул</td>
     <td>Наименование</td>
     <td>БарКод</td>
-    <td>Кол-во на WB<br>(Остаток)</td>
+
     <td>Кол-во продано</td>
     <td>Oстатки из 1С</td>
-     <td>Рекомендуемый/<br>(Будуший остаток)</td>
+    <td>Кол-во на WB<br>(Остаток)</td>
+    <td>Рекомендуемый/<br>(Будуший остаток)</td>
     <td>пп</td>
     <td>артикул</td>
 
@@ -179,9 +223,10 @@ echo <<<HTML
     <td>$article</td>
     <td>$name</td>
     <td>$barCode</td>
-    <td class="$alarm_class text14">$quantity</td>
+
     <td class="text14">$sell_count</td>
     <td class="text14">$quantity_1c</td>
+    <td class="$alarm_class text14">$quantity</td>
     <td><input type="number" name="_value_$article" value=$value_in_wb_bd></td>
     <td><input checked type="checkbox" name="_check_$article" value="1"></td>
     <input hidden type="text"  name = "_BarCode_$article" value="$barCode">
